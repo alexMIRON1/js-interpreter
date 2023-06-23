@@ -31,7 +31,6 @@ public class ExecutorJSCodeJob {
         this.jsCodeService = jsCodeService;
         this.jsCodeMapper = jsCodeMapper;
         this.scheduledJobs = new ConcurrentHashMap<>();
-        this.lock = new ReentrantLock();
     }
 
     public void doJob() {
