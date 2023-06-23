@@ -2,6 +2,9 @@ package com.alex.jsinterpreter.logic.service;
 
 import com.alex.jsinterpreter.document.JSCode;
 import com.alex.jsinterpreter.document.JSCodeStatus;
+import com.alex.jsinterpreter.domain.dto.JSCodeCommonResponse;
+import com.alex.jsinterpreter.domain.dto.JSCodeDetailedResponse;
+import com.alex.jsinterpreter.domain.mapper.JSCodeMapper;
 import com.alex.jsinterpreter.logic.job.ExecutionJSCodeJob;
 import com.alex.jsinterpreter.repository.JSCodeRepository;
 import lombok.extern.slf4j.Slf4j;
@@ -9,6 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 
@@ -19,39 +23,43 @@ import java.util.Optional;
  */
 @Service
 @Slf4j
-public record JSCodeService(JSCodeRepository jsCodeRepository,
-                            ExecutionJSCodeJob executionJSCodeJob) {
+public record JSCodeService(JSCodeRepository jsCodeRepository, ExecutionJSCodeJob executionJSCodeJob,
+                            JSCodeMapper jsCodeMapper) {
 
     public void executeJSCode(String jsCode, Optional<Instant> optionalScheduledTime) {
         if (optionalScheduledTime.isEmpty()) {
             optionalScheduledTime = Optional.of(Instant.now());
         }
         Instant scheduledTime = optionalScheduledTime.get();
-        Long jsCodeId  = createJSCodeEntity(jsCode, scheduledTime);
+        Long jsCodeId = createJSCodeEntity(jsCode, scheduledTime);
         executionJSCodeJob.scheduleJSCodeJobById(jsCodeId);
     }
 
     @Transactional
     public void updateStatus(Long jsCodeId, JSCodeStatus jsCodeStatus) {
-        JSCode jsCode = getById(jsCodeId);
+        JSCode jsCode = jsCodeMapper.detailedResponseMapToDocument(getById(jsCodeId));
         jsCode.setStatusCode(jsCodeStatus);
         jsCodeRepository.save(jsCode);
     }
 
     @Transactional
     public void updateScriptResult(Long jsCodeId, String scriptResult) {
-        JSCode jsCode = getById(jsCodeId);
+        JSCode jsCode = jsCodeMapper.detailedResponseMapToDocument(getById(jsCodeId));
         jsCode.setScriptResult(scriptResult);
         jsCodeRepository.save(jsCode);
     }
 
-    public JSCode getById(Long jsCodeId) {
+    public JSCodeDetailedResponse getById(Long jsCodeId) {
         Optional<JSCode> jsCode = jsCodeRepository.findById(jsCodeId);
         if (jsCode.isEmpty()) {
             log.warn("wrong js code id -> {}", jsCodeId);
             throw new NoSuchElementException("JS code with this id was not found" + jsCodeId);
         }
-        return jsCode.get();
+        return jsCode.map(jsCodeMapper::documentMapToDetailedResponse).orElseThrow();
+    }
+
+    public List<JSCodeCommonResponse> getListJSCodes() {
+        return jsCodeRepository.findAll().stream().map(jsCodeMapper::documentMapToIncompleteResponse).toList();
     }
 
     private Long createJSCodeEntity(String jsCode, Instant scheduledTime) {

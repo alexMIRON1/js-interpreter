@@ -1,5 +1,7 @@
 package com.alex.jsinterpreter.controller;
 
+import com.alex.jsinterpreter.domain.dto.JSCodeCommonResponse;
+import com.alex.jsinterpreter.domain.dto.JSCodeDetailedResponse;
 import com.alex.jsinterpreter.logic.service.JSCodeService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -27,8 +29,8 @@ public record JSCodeController(JSCodeService jsCodeService) {
     }
 
     @GetMapping
-    public List<Object> getJSCodes() {
-        return Collections.emptyList();
+    public List<JSCodeCommonResponse> getJSCodes() {
+        return jsCodeService.getListJSCodes();
     }
 
     @GetMapping("/{status}")
@@ -47,8 +49,8 @@ public record JSCodeController(JSCodeService jsCodeService) {
     }
 
     @GetMapping("/{id}")
-    public Object getJSCodeById(Long id) {
-        return null;
+    public JSCodeDetailedResponse getJSCodeById(Long id) {
+        return jsCodeService.getById(id);
     }
 
     @PutMapping

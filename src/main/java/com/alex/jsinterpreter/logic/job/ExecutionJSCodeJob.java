@@ -2,6 +2,7 @@ package com.alex.jsinterpreter.logic.job;
 
 import com.alex.jsinterpreter.document.JSCode;
 import com.alex.jsinterpreter.document.JSCodeStatus;
+import com.alex.jsinterpreter.domain.mapper.JSCodeMapper;
 import com.alex.jsinterpreter.logic.service.JSCodeService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -21,6 +22,7 @@ import java.util.concurrent.*;
 @RequiredArgsConstructor
 public class ExecutionJSCodeJob {
     private final JSCodeService jsCodeService;
+    private final JSCodeMapper jsCodeMapper;
     private Map<Long, ScheduledFuture<?>> scheduledJobs;
     private JSCode jsCode;
 
@@ -45,7 +47,7 @@ public class ExecutionJSCodeJob {
         scheduledJobs = new ConcurrentHashMap<>();
         try (ScheduledExecutorService threadPoolExecutor = new ScheduledThreadPoolExecutor(Runtime.getRuntime()
                 .availableProcessors())) {
-            jsCode = jsCodeService.getById(jsCodeId);
+            jsCode = jsCodeMapper.detailedResponseMapToDocument(jsCodeService.getById(jsCodeId));
             ScheduledFuture<?> scheduledJob = threadPoolExecutor.schedule(this::doJob, Duration
                     .between(Instant.now(), jsCode.getScheduledTime()).toMillis(), TimeUnit.MILLISECONDS);
             scheduledJobs.put(jsCodeId, scheduledJob);
