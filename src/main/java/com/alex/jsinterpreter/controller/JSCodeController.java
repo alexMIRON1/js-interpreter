@@ -7,10 +7,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
-import java.util.Optional;
 
 /**
  * This class {@code JSCodeController } represents endpoints of API which allow us doing operation with
@@ -18,14 +16,14 @@ import java.util.Optional;
  *
  * @author Oleksandr Myronenko
  */
-@RestController("api/v1/js-codes")
+@RestController
+@RequestMapping("/api/v1/js-codes")
 public record JSCodeController(JSCodeService jsCodeService) {
     @PostMapping
     public ResponseEntity<Void> executeJSCode(@RequestBody String jsCode,
-                                              @RequestParam
-                                              Optional<Instant> scheduledTime) {
+                                              @RequestParam(required = false) String scheduledTime) {
         jsCodeService.executeJSCode(jsCode, scheduledTime);
-        return new ResponseEntity<>(HttpStatus.CREATED);
+        return new ResponseEntity<>(HttpStatus.ACCEPTED);
     }
 
     @GetMapping
@@ -49,7 +47,7 @@ public record JSCodeController(JSCodeService jsCodeService) {
     }
 
     @GetMapping("/{id}")
-    public JSCodeDetailedResponse getJSCodeById(Long id) {
+    public JSCodeDetailedResponse getJSCodeById(String id) {
         return jsCodeService.getById(id);
     }
 
@@ -59,7 +57,7 @@ public record JSCodeController(JSCodeService jsCodeService) {
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteInactiveJSCode(Long id) {
+    public ResponseEntity<Void> deleteInactiveJSCode(String id) {
         return null;
     }
 }

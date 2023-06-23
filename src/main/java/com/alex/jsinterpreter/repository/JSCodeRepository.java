@@ -8,5 +8,5 @@ import org.springframework.data.mongodb.repository.MongoRepository;
  *
  * @author Oleksandr Myronenko
  */
-public interface JSCodeRepository extends MongoRepository<JSCode, Long> {
+public interface JSCodeRepository extends MongoRepository<JSCode, String> {
 }

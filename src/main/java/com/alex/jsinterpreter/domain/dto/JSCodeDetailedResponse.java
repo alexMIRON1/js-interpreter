@@ -4,7 +4,7 @@ import com.alex.jsinterpreter.document.JSCodeStatus;
 import lombok.*;
 
 import java.time.Instant;
-import java.time.LocalTime;
+import java.util.List;
 
 @Getter
 @Setter
@@ -12,10 +12,10 @@ import java.time.LocalTime;
 @AllArgsConstructor
 @ToString
 public class JSCodeDetailedResponse {
-    private Long jsCodeId;
-    private JSCodeStatus jsCodeStatus;
+    private String jsCodeId;
+    private JSCodeStatus statusCode;
     private String scriptBody;
-    private String scriptResult;
+    private List<String> scriptResults;
     private Instant scheduledTime;
-    private LocalTime executionTime;
+    private Long executionTime;
 }
