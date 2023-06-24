@@ -24,8 +24,8 @@ public class JSCodeCollector implements ProxyExecutable {
     public Object execute(Value... arguments) {
         for (Value arg : arguments) {
             scriptResults.add(String.valueOf(arg.as(Object.class)));
-            log.info("argument was added to collection -> {}", arg);
         }
+        log.info("arguments was added to collection");
         return null;
     }
 }

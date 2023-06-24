@@ -18,42 +18,46 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.concurrent.*;
 
-
+/**
+ * class using responsible for managing js code jobs
+ *
+ * @author Oleksandr Myronenko
+ */
 @Slf4j
 @Component
 public class ExecutorJSCodeJob {
     private final JSCodeService jsCodeService;
     private final JSCodeMapper jsCodeMapper;
     private final Map<String, ScheduledFuture<?>> scheduledJobs;
-
+    private final ScheduledExecutorService threadPoolExecutor;
 
     public ExecutorJSCodeJob(JSCodeService jsCodeService, JSCodeMapper jsCodeMapper) {
         this.jsCodeService = jsCodeService;
         this.jsCodeMapper = jsCodeMapper;
         this.scheduledJobs = new ConcurrentHashMap<>();
+        this.threadPoolExecutor = new ScheduledThreadPoolExecutor(Runtime.getRuntime().availableProcessors());
     }
 
-    public void doJob(JSCode jsCode) {
-        long startExecution = System.currentTimeMillis();
-        executeJSCode(jsCode);
-        jsCodeService.updateExecutionTime(jsCode.getJsCodeId(), System.currentTimeMillis() - startExecution);
-    }
 
+    /**
+     * using for scheduling js code job
+     *
+     * @param jsCodeId js code id for scheduling
+     */
     public void scheduleJSCodeJobById(String jsCodeId) {
         JSCode jsCode = jsCodeMapper.detailedResponseMapToDocument(jsCodeService.getById(jsCodeId));
-        if (jsCode.getScheduledTime() == null) {
-            doJob(jsCode);
-            log.info("js code going to be executed");
-        } else {
-            ScheduledExecutorService threadPoolExecutor = new ScheduledThreadPoolExecutor(Runtime.getRuntime()
-                    .availableProcessors());
-            ScheduledFuture<?> scheduledJob = threadPoolExecutor.schedule(()->doJob(jsCode), Duration
-                    .between(Instant.now(), jsCode.getScheduledTime()).toSeconds(), TimeUnit.SECONDS);
-            scheduledJobs.put(jsCodeId, scheduledJob);
-            log.info("Js code was planned");
-        }
+        ScheduledFuture<?> scheduledJob = threadPoolExecutor.schedule(() -> doJob(jsCode), Duration
+                .between(Instant.now(), jsCode.getScheduledTime()).toSeconds(), TimeUnit.SECONDS);
+        scheduledJobs.put(jsCodeId, scheduledJob);
+        log.info("Js code was planned");
+
     }
 
+    /**
+     * using for stopping js code job by id
+     *
+     * @param jsCodeId js code id
+     */
     public void stopJSCodeJobById(String jsCodeId) {
         ScheduledFuture<?> scheduledJob = scheduledJobs.get(jsCodeId);
         if (scheduledJob == null) {
@@ -66,6 +70,12 @@ public class ExecutorJSCodeJob {
         log.info("Scheduled job was stopped");
     }
 
+    private void doJob(JSCode jsCode) {
+        long startExecution = System.currentTimeMillis();
+        executeJSCode(jsCode);
+        jsCodeService.updateExecutionTime(jsCode.getJsCodeId(), System.currentTimeMillis() - startExecution);
+    }
+
     private void executeJSCode(JSCode jsCode) {
         String script = jsCode.getScriptBody();
         String jsCodeId = jsCode.getJsCodeId();
@@ -75,8 +85,10 @@ public class ExecutorJSCodeJob {
         List<String> scriptResults = new ArrayList<>();
         try (Context context = Context.newBuilder(js).build()) {
             jsCodeService.updateStatus(jsCodeId, JSCodeStatus.EXECUTING);
+            // collecting all output to collection
             context.getBindings(js).getMember(consoleMember).putMember(logMember,
                     new JSCodeCollector(scriptResults));
+            // executing js script
             context.eval(js, script);
             jsCodeService.updateScriptResult(jsCodeId, scriptResults);
             if (checkScriptResults(scriptResults)) {

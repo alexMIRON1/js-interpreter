@@ -13,12 +13,12 @@ import org.mapstruct.Mapper;
 @Mapper(componentModel = "spring")
 public interface JSCodeMapper {
     /**
-     * method is used to map document to incomplete response
+     * method is used to map document to common response
      *
      * @param jsCode document
-     * @return js code document in incomplete response
+     * @return js code document in common response
      */
-    JSCodeCommonResponse documentMapToIncompleteResponse(JSCode jsCode);
+    JSCodeCommonResponse documentMapToCommonResponse(JSCode jsCode);
 
     /**
      * method is used to map document to detailed response

@@ -6,6 +6,11 @@ import lombok.*;
 import java.time.Instant;
 import java.util.List;
 
+/**
+ * dto class for js code in detailed response
+ *
+ * @author Oleksandr Myronenko
+ */
 @Getter
 @Setter
 @NoArgsConstructor

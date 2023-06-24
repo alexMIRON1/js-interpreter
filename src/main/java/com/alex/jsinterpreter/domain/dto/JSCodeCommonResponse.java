@@ -5,6 +5,11 @@ import lombok.*;
 
 import java.time.Instant;
 
+/**
+ * dto class for js code in common response
+ *
+ * @author Oleksandr Myronenko
+ */
 @Getter
 @Setter
 @ToString
