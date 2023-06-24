@@ -1,6 +1,5 @@
 package com.alex.jsinterpreter.document;
 
-import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -8,7 +7,7 @@ import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.Instant;
-import java.time.LocalTime;
+import java.util.List;
 
 /**
  * The document stores JavaScript code and all needed information about it.
@@ -19,13 +18,21 @@ import java.time.LocalTime;
 @Getter
 @Setter
 @NoArgsConstructor
-@AllArgsConstructor
 public class JSCode {
     @Id
-    private Long jsCodeId;
+    private String jsCodeId;
     private JSCodeStatus statusCode;
     private String scriptBody;
-    private String scriptResult;
+    private List<String> scriptResults;
     private Instant scheduledTime;
-    private LocalTime executionTime;
+    private Long executionTime;
+
+    public JSCode(JSCodeStatus statusCode, String scriptBody, List<String> scriptResults,
+                  Instant scheduledTime, Long executionTime) {
+        this.statusCode = statusCode;
+        this.scriptBody = scriptBody;
+        this.scriptResults = scriptResults;
+        this.scheduledTime = scheduledTime;
+        this.executionTime = executionTime;
+    }
 }
