@@ -7,7 +7,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.Collections;
 import java.util.List;
 
 /**
@@ -31,33 +30,35 @@ public record JSCodeController(JSCodeService jsCodeService) {
         return jsCodeService.getListJSCodes();
     }
 
-    @GetMapping("/{status}")
-    public List<Object> getJSCodesByStatus(String status) {
-        return Collections.emptyList();
+    @GetMapping("status/{status}")
+    public List<JSCodeCommonResponse> getJSCodesByStatus(@PathVariable("status") String status) {
+        return jsCodeService.getListJSCodesByStatus(status);
     }
 
-    @GetMapping("/sortById")
-    public List<Object> getJSCodesSortedById(@RequestParam String sortOrder) {
-        return Collections.emptyList();
+    @GetMapping("/sortedById")
+    public List<JSCodeCommonResponse> getJSCodesSortedById() {
+        return jsCodeService.getListJSCodesSortedById();
     }
 
-    @GetMapping("/sortByScheduledTime")
-    public List<Object> getJSCodesSortedByScheduledTime(@RequestParam String sortOrder) {
-        return Collections.emptyList();
+    @GetMapping("/sortedByScheduledTime")
+    public List<JSCodeCommonResponse> getJSCodesSortedByScheduledTime() {
+        return jsCodeService.getListJSCodesSortedByScheduledTime();
     }
 
     @GetMapping("/{id}")
-    public JSCodeDetailedResponse getJSCodeById(String id) {
+    public JSCodeDetailedResponse getJSCodeById(@PathVariable("id") String id) {
         return jsCodeService.getById(id);
     }
 
-    @PutMapping
-    public ResponseEntity<Void> stopExecutionJSCode() {
-        return null;
+    @PutMapping("/{id}")
+    public ResponseEntity<Void> stopExecutionJSCode(@PathVariable("id") String id) {
+        jsCodeService.stopJSCode(id);
+        return new ResponseEntity<>(HttpStatus.OK);
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteInactiveJSCode(String id) {
-        return null;
+    public ResponseEntity<Void> deleteInactiveJSCode(@PathVariable("id") String id) {
+        jsCodeService.deleteInactiveJSCode(id);
+        return new ResponseEntity<>(HttpStatus.OK);
     }
 }
