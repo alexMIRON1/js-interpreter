@@ -3,7 +3,7 @@ package com.alex.jsinterpreter.logic.job;
 import com.alex.jsinterpreter.document.JSCode;
 import com.alex.jsinterpreter.document.JSCodeStatus;
 import com.alex.jsinterpreter.domain.mapper.JSCodeMapper;
-import com.alex.jsinterpreter.logic.collector.JSCodeCollector;
+import com.alex.jsinterpreter.logic.collector.JSCodeCollectionCollector;
 import com.alex.jsinterpreter.logic.service.JSCodeService;
 import lombok.extern.slf4j.Slf4j;
 import org.graalvm.polyglot.Context;
@@ -46,7 +46,7 @@ public class ExecutorJSCodeJob {
      */
     public void scheduleJSCodeJobById(String jsCodeId) {
         JSCode jsCode = jsCodeMapper.detailedResponseMapToDocument(jsCodeService.getById(jsCodeId));
-        ScheduledFuture<?> scheduledJob = threadPoolExecutor.schedule(() -> doJob(jsCode), Duration
+        ScheduledFuture<?> scheduledJob = threadPoolExecutor.schedule(() -> executeJSCode(jsCode), Duration
                 .between(Instant.now(), jsCode.getScheduledTime()).toSeconds(), TimeUnit.SECONDS);
         scheduledJobs.put(jsCodeId, scheduledJob);
         log.info("Js code was planned");
@@ -70,13 +70,12 @@ public class ExecutorJSCodeJob {
         log.info("Scheduled job was stopped");
     }
 
-    private void doJob(JSCode jsCode) {
-        long startExecution = System.currentTimeMillis();
-        executeJSCode(jsCode);
-        jsCodeService.updateExecutionTime(jsCode.getJsCodeId(), System.currentTimeMillis() - startExecution);
-    }
-
-    private void executeJSCode(JSCode jsCode) {
+    /**
+     * method using for execution js code
+     *
+     * @param jsCode js code for execution
+     */
+    public void executeJSCode(JSCode jsCode) {
         String script = jsCode.getScriptBody();
         String jsCodeId = jsCode.getJsCodeId();
         String js = "js";
@@ -87,9 +86,13 @@ public class ExecutorJSCodeJob {
             jsCodeService.updateStatus(jsCodeId, JSCodeStatus.EXECUTING);
             // collecting all output to collection
             context.getBindings(js).getMember(consoleMember).putMember(logMember,
-                    new JSCodeCollector(scriptResults));
+                    new JSCodeCollectionCollector(scriptResults));
             // executing js script
+            long startExecution = System.currentTimeMillis();
             context.eval(js, script);
+            // setting execution time
+            jsCodeService.updateExecutionTime(jsCode.getJsCodeId(),
+                    System.currentTimeMillis() - startExecution);
             jsCodeService.updateScriptResult(jsCodeId, scriptResults);
             if (checkScriptResults(scriptResults)) {
                 jsCodeService.updateStatus(jsCodeId, JSCodeStatus.COMPLETED);

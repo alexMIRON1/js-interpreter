@@ -35,19 +35,24 @@ public record JSCodeService(JSCodeRepository jsCodeRepository, JSCodeMapper jsCo
      *
      * @param jsCode        js code script for execution
      * @param scheduledTime scheduled time execution
+     * @param showResults   boolean value for showing results of execution
+     * @return list of script results
      */
     @Transactional
-    public void executeJSCode(String jsCode, String scheduledTime) {
+    public List<String> executeJSCode(String jsCode, String scheduledTime, boolean showResults) {
+        checkScheduledCodeWithShowingResults(scheduledTime, showResults);
         Instant instantScheduledTime;
         String jsCodeId;
         if (scheduledTime == null) {
             instantScheduledTime = Instant.now();
             jsCodeId = createJSCodeDocument(jsCode, instantScheduledTime);
+            executorJSCodeJob.executeJSCode(jsCodeMapper.detailedResponseMapToDocument(getById(jsCodeId)));
         } else {
             jsCodeId = createJSCodeDocument(jsCode, ZonedDateTime.of(LocalDateTime
                     .parse(scheduledTime), ZoneId.systemDefault()).toInstant());
+            executorJSCodeJob.scheduleJSCodeJobById(jsCodeId);
         }
-        executorJSCodeJob.scheduleJSCodeJobById(jsCodeId);
+        return getById(jsCodeId).getScriptResults();
     }
 
     /**
@@ -189,5 +194,12 @@ public record JSCodeService(JSCodeRepository jsCodeRepository, JSCodeMapper jsCo
         JSCodeStatus currentStatus = jsCode.getStatusCode();
         return currentStatus.equals(JSCodeStatus.COMPLETED) || currentStatus.equals(JSCodeStatus.FAILED) ||
                 currentStatus.equals(JSCodeStatus.STOPPED);
+    }
+
+    private void checkScheduledCodeWithShowingResults(String scheduledTime, boolean showResults) {
+        if (showResults && scheduledTime != null) {
+            log.warn("scheduled time is not null -> {} and show results is true -> {}", scheduledTime, true);
+            throw new UnsupportedOperationException("It is impossible scheduling an show output and the same time");
+        }
     }
 }

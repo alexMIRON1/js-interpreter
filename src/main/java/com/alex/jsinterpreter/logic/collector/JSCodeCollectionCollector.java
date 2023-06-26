@@ -13,10 +13,10 @@ import java.util.List;
  * @author Oleksandr Myronenko
  */
 @Slf4j
-public class JSCodeCollector implements ProxyExecutable {
+public class JSCodeCollectionCollector implements ProxyExecutable {
     private final List<String> scriptResults;
 
-    public JSCodeCollector(List<String> scriptResults) {
+    public JSCodeCollectionCollector(List<String> scriptResults) {
         this.scriptResults = scriptResults;
     }
 
