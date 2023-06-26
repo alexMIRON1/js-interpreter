@@ -3,6 +3,7 @@ package com.alex.jsinterpreter.controller;
 import com.alex.jsinterpreter.domain.dto.JSCodeCommonResponse;
 import com.alex.jsinterpreter.domain.dto.JSCodeDetailedResponse;
 import com.alex.jsinterpreter.logic.service.JSCodeService;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -19,9 +20,13 @@ import java.util.List;
 @RequestMapping("/api/v1/js-codes")
 public record JSCodeController(JSCodeService jsCodeService) {
     @PostMapping
-    public ResponseEntity<Void> executeJSCode(@RequestBody String jsCode,
-                                              @RequestParam(required = false) String scheduledTime) {
-        jsCodeService.executeJSCode(jsCode, scheduledTime);
+    public ResponseEntity<List<String>> executeJSCode(HttpServletResponse response, @RequestBody String jsCode,
+                                           @RequestParam(required = false) String scheduledTime,
+                                           @RequestParam(required = false) boolean showResults) {
+        List<String> scriptResults = jsCodeService.executeJSCode(jsCode, scheduledTime, showResults);
+        if(showResults){
+            return new ResponseEntity<>(scriptResults,HttpStatus.ACCEPTED);
+        }
         return new ResponseEntity<>(HttpStatus.ACCEPTED);
     }
 
