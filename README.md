@@ -19,7 +19,6 @@ After that you will see list of all databases in mongo and one of them must be j
 ![MyImage](image/main-class.png)
 2. Running application
 ![MyImage](image/run-application.png)
-### Via CLI
 
 ## Example of general operation via postman
 Make POST request
