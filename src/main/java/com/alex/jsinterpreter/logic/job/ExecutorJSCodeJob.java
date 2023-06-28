@@ -2,7 +2,6 @@ package com.alex.jsinterpreter.logic.job;
 
 import com.alex.jsinterpreter.document.JSCode;
 import com.alex.jsinterpreter.document.JSCodeStatus;
-import com.alex.jsinterpreter.domain.mapper.JSCodeMapper;
 import com.alex.jsinterpreter.logic.collector.JSCodeCollectionCollector;
 import com.alex.jsinterpreter.logic.service.JSCodeService;
 import lombok.extern.slf4j.Slf4j;
@@ -27,13 +26,11 @@ import java.util.concurrent.*;
 @Component
 public class ExecutorJSCodeJob {
     private final JSCodeService jsCodeService;
-    private final JSCodeMapper jsCodeMapper;
     private final Map<String, ScheduledFuture<?>> scheduledJobs;
     private final ScheduledExecutorService threadPoolExecutor;
 
-    public ExecutorJSCodeJob(JSCodeService jsCodeService, JSCodeMapper jsCodeMapper) {
+    public ExecutorJSCodeJob(JSCodeService jsCodeService) {
         this.jsCodeService = jsCodeService;
-        this.jsCodeMapper = jsCodeMapper;
         this.scheduledJobs = new ConcurrentHashMap<>();
         this.threadPoolExecutor = new ScheduledThreadPoolExecutor(Runtime.getRuntime().availableProcessors());
     }
@@ -42,13 +39,12 @@ public class ExecutorJSCodeJob {
     /**
      * using for scheduling js code job
      *
-     * @param jsCodeId js code id for scheduling
+     * @param jsCode js code for scheduling
      */
-    public void scheduleJSCodeJobById(String jsCodeId) {
-        JSCode jsCode = jsCodeMapper.detailedResponseMapToDocument(jsCodeService.getById(jsCodeId));
+    public void scheduleJSCodeJobById(JSCode jsCode) {
         ScheduledFuture<?> scheduledJob = threadPoolExecutor.schedule(() -> executeJSCode(jsCode), Duration
                 .between(Instant.now(), jsCode.getScheduledTime()).toSeconds(), TimeUnit.SECONDS);
-        scheduledJobs.put(jsCodeId, scheduledJob);
+        scheduledJobs.put(jsCode.getJsCodeId(), scheduledJob);
         log.info("Js code was planned");
 
     }
@@ -61,12 +57,12 @@ public class ExecutorJSCodeJob {
     public void stopJSCodeJobById(String jsCodeId) {
         ScheduledFuture<?> scheduledJob = scheduledJobs.get(jsCodeId);
         if (scheduledJob == null) {
-            log.warn("scheduled job is null");
+            log.warn("scheduled job does not exist by this id -> {}", jsCodeId);
             throw new NoSuchElementException("This job does not exist by this id " + jsCodeId);
         }
         scheduledJob.cancel(true);
         scheduledJobs.remove(jsCodeId);
-        jsCodeService.updateStatus(jsCodeId, JSCodeStatus.STOPPED);
+        jsCodeService.updateStatus(jsCodeService.getById(jsCodeId), JSCodeStatus.STOPPED);
         log.info("Scheduled job was stopped");
     }
 
@@ -77,34 +73,36 @@ public class ExecutorJSCodeJob {
      */
     public void executeJSCode(JSCode jsCode) {
         String script = jsCode.getScriptBody();
-        String jsCodeId = jsCode.getJsCodeId();
         String js = "js";
         String consoleMember = "console";
         String logMember = "log";
+        long startExecution = 0L;
         List<String> scriptResults = new ArrayList<>();
         try (Context context = Context.newBuilder(js).build()) {
-            jsCodeService.updateStatus(jsCodeId, JSCodeStatus.EXECUTING);
+            jsCodeService.updateStatus(jsCode, JSCodeStatus.EXECUTING);
             // collecting all output to collection
             context.getBindings(js).getMember(consoleMember).putMember(logMember,
                     new JSCodeCollectionCollector(scriptResults));
             // executing js script
-            long startExecution = System.currentTimeMillis();
+            startExecution = System.currentTimeMillis();
             context.eval(js, script);
             // setting execution time
-            jsCodeService.updateExecutionTime(jsCode.getJsCodeId(),
+            jsCodeService.updateExecutionTime(jsCode,
                     System.currentTimeMillis() - startExecution);
-            jsCodeService.updateScriptResult(jsCodeId, scriptResults);
+            jsCodeService.updateScriptResult(jsCode, scriptResults);
             if (checkScriptResults(scriptResults)) {
-                jsCodeService.updateStatus(jsCodeId, JSCodeStatus.COMPLETED);
+                jsCodeService.updateStatus(jsCode, JSCodeStatus.COMPLETED);
             } else {
-                jsCodeService.updateStatus(jsCodeId, JSCodeStatus.FAILED);
+                jsCodeService.updateStatus(jsCode, JSCodeStatus.FAILED);
             }
             log.info("JavaScriptCode was executed, get result -> {} ", scriptResults);
         } catch (PolyglotException e) {
+            jsCodeService.updateExecutionTime(jsCode,
+                    System.currentTimeMillis() - startExecution);
             scriptResults.add(e.getMessage());
-            jsCodeService.updateScriptResult(jsCodeId, scriptResults);
+            jsCodeService.updateScriptResult(jsCode, scriptResults);
             log.warn("java script code produce error -> {}", e.getMessage());
-            jsCodeService.updateStatus(jsCodeId, JSCodeStatus.FAILED);
+            jsCodeService.updateStatus(jsCode, JSCodeStatus.FAILED);
         }
     }
 

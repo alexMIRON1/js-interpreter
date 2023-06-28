@@ -5,18 +5,12 @@ import com.alex.jsinterpreter.document.JSCodeStatus;
 import com.alex.jsinterpreter.domain.dto.JSCodeCommonResponse;
 import com.alex.jsinterpreter.domain.dto.JSCodeDetailedResponse;
 import com.alex.jsinterpreter.domain.mapper.JSCodeMapper;
-import com.alex.jsinterpreter.logic.job.ExecutorJSCodeJob;
 import com.alex.jsinterpreter.repository.JSCodeRepository;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Instant;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
-import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Optional;
@@ -28,42 +22,14 @@ import java.util.Optional;
  */
 @Service
 @Slf4j
-public record JSCodeService(JSCodeRepository jsCodeRepository, JSCodeMapper jsCodeMapper,
-                            @Lazy ExecutorJSCodeJob executorJSCodeJob) {
-    /**
-     * using for executing js code
-     *
-     * @param jsCode        js code script for execution
-     * @param scheduledTime scheduled time execution
-     * @param showResults   boolean value for showing results of execution
-     * @return list of script results
-     */
-    @Transactional
-    public List<String> executeJSCode(String jsCode, String scheduledTime, boolean showResults) {
-        checkScheduledCodeWithShowingResults(scheduledTime, showResults);
-        Instant instantScheduledTime;
-        String jsCodeId;
-        if (scheduledTime == null) {
-            instantScheduledTime = Instant.now();
-            jsCodeId = createJSCodeDocument(jsCode, instantScheduledTime);
-            executorJSCodeJob.executeJSCode(jsCodeMapper.detailedResponseMapToDocument(getById(jsCodeId)));
-        } else {
-            jsCodeId = createJSCodeDocument(jsCode, ZonedDateTime.of(LocalDateTime
-                    .parse(scheduledTime), ZoneId.systemDefault()).toInstant());
-            executorJSCodeJob.scheduleJSCodeJobById(jsCodeId);
-        }
-        return getById(jsCodeId).getScriptResults();
-    }
-
+public record JSCodeService(JSCodeRepository jsCodeRepository, JSCodeMapper jsCodeMapper) {
     /**
      * using for updating js code status
      *
-     * @param jsCodeId     js code id for updating
+     * @param jsCode       js code  for updating
      * @param jsCodeStatus new js code status
      */
-    @Transactional
-    public void updateStatus(String jsCodeId, JSCodeStatus jsCodeStatus) {
-        JSCode jsCode = jsCodeMapper.detailedResponseMapToDocument(getById(jsCodeId));
+    public void updateStatus(JSCode jsCode, JSCodeStatus jsCodeStatus) {
         jsCode.setStatusCode(jsCodeStatus);
         jsCodeRepository.save(jsCode);
     }
@@ -71,12 +37,10 @@ public record JSCodeService(JSCodeRepository jsCodeRepository, JSCodeMapper jsCo
     /**
      * using for updating js code script result
      *
-     * @param jsCodeId     js code id for updating
+     * @param jsCode       js code  for updating
      * @param scriptResult new js code script result
      */
-    @Transactional
-    public void updateScriptResult(String jsCodeId, List<String> scriptResult) {
-        JSCode jsCode = jsCodeMapper.detailedResponseMapToDocument(getById(jsCodeId));
+    public void updateScriptResult(JSCode jsCode, List<String> scriptResult) {
         jsCode.setScriptResults(scriptResult);
         jsCodeRepository.save(jsCode);
     }
@@ -84,12 +48,10 @@ public record JSCodeService(JSCodeRepository jsCodeRepository, JSCodeMapper jsCo
     /**
      * using for updating js code execution time
      *
-     * @param jsCodeId      js code id for updating
+     * @param jsCode        js code  for updating
      * @param executionTime new js code execution time
      */
-    @Transactional
-    public void updateExecutionTime(String jsCodeId, Long executionTime) {
-        JSCode jsCode = jsCodeMapper.detailedResponseMapToDocument(getById(jsCodeId));
+    public void updateExecutionTime(JSCode jsCode, Long executionTime) {
         jsCode.setExecutionTime(executionTime);
         jsCodeRepository.save(jsCode);
     }
@@ -100,13 +62,23 @@ public record JSCodeService(JSCodeRepository jsCodeRepository, JSCodeMapper jsCo
      * @param jsCodeId js code id
      * @return {@link JSCodeDetailedResponse}
      */
-    public JSCodeDetailedResponse getById(String jsCodeId) {
+    public JSCode getById(String jsCodeId) {
         Optional<JSCode> jsCode = jsCodeRepository.findById(jsCodeId);
         if (jsCode.isEmpty()) {
             log.warn("wrong js code id -> {}", jsCodeId);
             throw new NoSuchElementException("JS code with this id was not found " + jsCodeId);
         }
-        return jsCode.map(jsCodeMapper::documentMapToDetailedResponse).orElseThrow();
+        return jsCode.get();
+    }
+
+    /**
+     * using for getting by id detailed js code
+     *
+     * @param jsCodeId js code id
+     * @return detailed js code
+     */
+    public JSCodeDetailedResponse getDetailedJSCodeById(String jsCodeId) {
+        return jsCodeMapper.documentMapToDetailedResponse(getById(jsCodeId));
     }
 
     /**
@@ -156,22 +128,13 @@ public record JSCodeService(JSCodeRepository jsCodeRepository, JSCodeMapper jsCo
     }
 
     /**
-     * using for stopping js code
-     *
-     * @param jsCodeId js code id for stop
-     */
-    public void stopJSCode(String jsCodeId) {
-        executorJSCodeJob.stopJSCodeJobById(jsCodeId);
-    }
-
-    /**
      * using for deletion inactive js code
      *
      * @param jsCodeId js code id for deletion
      */
     @Transactional
     public void deleteInactiveJSCode(String jsCodeId) {
-        JSCode jsCode = jsCodeMapper.detailedResponseMapToDocument(getById(jsCodeId));
+        JSCode jsCode = getById(jsCodeId);
         if (!checkStatusForDeletionJSCode(jsCode)) {
             log.warn("js code status is active -> {}", jsCode.getStatusCode());
             throw new IllegalArgumentException("Js code status is active");
@@ -180,26 +143,9 @@ public record JSCodeService(JSCodeRepository jsCodeRepository, JSCodeMapper jsCo
         log.info("js code was deleted by id -> {}", jsCodeId);
     }
 
-    private String createJSCodeDocument(String jsCode, Instant scheduledTime) {
-        JSCode jsCodeDocument = new JSCode();
-        jsCodeDocument.setScriptBody(jsCode);
-        jsCodeDocument.setScheduledTime(scheduledTime);
-        jsCodeDocument.setStatusCode(JSCodeStatus.PLANNED);
-        jsCodeRepository.save(jsCodeDocument);
-        log.info("JSCode was saved to database");
-        return jsCodeDocument.getJsCodeId();
-    }
-
     private boolean checkStatusForDeletionJSCode(JSCode jsCode) {
         JSCodeStatus currentStatus = jsCode.getStatusCode();
         return currentStatus.equals(JSCodeStatus.COMPLETED) || currentStatus.equals(JSCodeStatus.FAILED) ||
                 currentStatus.equals(JSCodeStatus.STOPPED);
-    }
-
-    private void checkScheduledCodeWithShowingResults(String scheduledTime, boolean showResults) {
-        if (showResults && scheduledTime != null) {
-            log.warn("scheduled time is not null -> {} and show results is true -> {}", scheduledTime, true);
-            throw new UnsupportedOperationException("It is impossible scheduling an show output and the same time");
-        }
     }
 }
