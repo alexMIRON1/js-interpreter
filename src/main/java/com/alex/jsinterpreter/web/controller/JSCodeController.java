@@ -1,4 +1,4 @@
-package com.alex.jsinterpreter.controller;
+package com.alex.jsinterpreter.web.controller;
 
 import com.alex.jsinterpreter.domain.dto.JSCodeCommonResponse;
 import com.alex.jsinterpreter.domain.dto.JSCodeDetailedResponse;
