@@ -2,7 +2,8 @@ package com.alex.jsinterpreter.logic.job;
 
 import com.alex.jsinterpreter.document.JSCode;
 import com.alex.jsinterpreter.document.JSCodeStatus;
-import com.alex.jsinterpreter.logic.collector.JSCodeCollectionCollector;
+import com.alex.jsinterpreter.logic.JSMember;
+import com.alex.jsinterpreter.logic.handler.JSCodeResultHandler;
 import com.alex.jsinterpreter.logic.service.JSCodeService;
 import lombok.extern.slf4j.Slf4j;
 import org.graalvm.polyglot.Context;
@@ -11,8 +12,6 @@ import org.springframework.stereotype.Component;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.concurrent.*;
@@ -28,11 +27,13 @@ public class ExecutorJSCodeJob {
     private final JSCodeService jsCodeService;
     private final Map<String, ScheduledFuture<?>> scheduledJobs;
     private final ScheduledExecutorService threadPoolExecutor;
+    private final JSCodeResultHandler jsCodeResultHandler;
 
-    public ExecutorJSCodeJob(JSCodeService jsCodeService) {
+    public ExecutorJSCodeJob(JSCodeService jsCodeService, JSCodeResultHandler jsCodeResultHandler) {
         this.jsCodeService = jsCodeService;
         this.scheduledJobs = new ConcurrentHashMap<>();
         this.threadPoolExecutor = new ScheduledThreadPoolExecutor(Runtime.getRuntime().availableProcessors());
+        this.jsCodeResultHandler = jsCodeResultHandler;
     }
 
 
@@ -72,41 +73,18 @@ public class ExecutorJSCodeJob {
      * @param jsCode js code for execution
      */
     public void executeJSCode(JSCode jsCode) {
-        String script = jsCode.getScriptBody();
-        String js = "js";
-        String consoleMember = "console";
-        String logMember = "log";
+        // clear all previous script results
+        jsCodeResultHandler.clearAllResults();
         long startExecution = 0L;
-        List<String> scriptResults = new ArrayList<>();
-        try (Context context = Context.newBuilder(js).build()) {
-            jsCodeService.updateStatus(jsCode, JSCodeStatus.EXECUTING);
-            // collecting all output to collection
-            context.getBindings(js).getMember(consoleMember).putMember(logMember,
-                    new JSCodeCollectionCollector(scriptResults));
-            // executing js script
+        try (Context context = Context.newBuilder(JSMember.JS.getValue()).build()) {
             startExecution = System.currentTimeMillis();
-            context.eval(js, script);
-            // setting execution time
-            jsCodeService.updateExecutionTime(jsCode,
-                    System.currentTimeMillis() - startExecution);
-            jsCodeService.updateScriptResult(jsCode, scriptResults);
-            if (checkScriptResults(scriptResults)) {
-                jsCodeService.updateStatus(jsCode, JSCodeStatus.COMPLETED);
-            } else {
-                jsCodeService.updateStatus(jsCode, JSCodeStatus.FAILED);
-            }
-            log.info("JavaScriptCode was executed, get result -> {} ", scriptResults);
+            jsCodeResultHandler.handleOutputExecutingAndUpdateJSCode(context,jsCode);
+            jsCodeService.updateExecutionTime(jsCode, System.currentTimeMillis() - startExecution);
+            log.info("JavaScriptCode was executed, get result -> {} ", jsCode.getScriptResults());
         } catch (PolyglotException e) {
             jsCodeService.updateExecutionTime(jsCode,
                     System.currentTimeMillis() - startExecution);
-            scriptResults.add(e.getMessage());
-            jsCodeService.updateScriptResult(jsCode, scriptResults);
-            log.warn("java script code produce error -> {}", e.getMessage());
-            jsCodeService.updateStatus(jsCode, JSCodeStatus.FAILED);
+            jsCodeResultHandler.handleExceptionsAndUpdateJSCode(e,jsCode);
         }
-    }
-
-    private boolean checkScriptResults(List<String> scriptResults) {
-        return !scriptResults.contains("Infinity");
     }
 }
