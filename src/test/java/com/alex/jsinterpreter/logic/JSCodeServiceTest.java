@@ -3,7 +3,6 @@ package com.alex.jsinterpreter.logic;
 import com.alex.jsinterpreter.document.JSCode;
 import com.alex.jsinterpreter.document.JSCodeStatus;
 import com.alex.jsinterpreter.domain.dto.JSCodeCommonResponse;
-import com.alex.jsinterpreter.domain.dto.JSCodeDetailedResponse;
 import com.alex.jsinterpreter.logic.service.JSCodeService;
 import com.alex.jsinterpreter.repository.JSCodeRepository;
 import org.junit.jupiter.api.Test;
@@ -20,7 +19,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
- * class responsible for testing business logic application
+ * class responsible for testing {@link JSCodeService} class methods
  *
  * @author Oleksandr Myronenko
  */
@@ -30,58 +29,6 @@ class JSCodeServiceTest {
     private JSCodeService jsCodeService;
     @MockBean
     private JSCodeRepository jsCodeRepository;
-
-    @Test
-    void executeJSCodeTest() {
-        JSCode completedJSCode = new JSCode(JSCodeStatus.COMPLETED, JSCodeScript.JS_CODE_RIGHT_SCRIPT
-                , JSCodeResult.SUCCESSFUL_RESULT, Instant.now(), 345L);
-        Mockito.when(jsCodeRepository.save(completedJSCode)).thenReturn(completedJSCode);
-        Mockito.when(jsCodeRepository.findById(null)).thenReturn(Optional.of(completedJSCode));
-
-        List<String> scriptActualResults = jsCodeService.executeJSCode(JSCodeScript.JS_CODE_RIGHT_SCRIPT,
-                null, false);
-        List<String> scriptExpectedResults = JSCodeResult.SUCCESSFUL_RESULT;
-        for (int i = 0; i < scriptActualResults.size(); i++) {
-            assertEquals(scriptExpectedResults.get(i), scriptActualResults.get(i));
-        }
-    }
-
-    @Test
-    void executeInfinityJSCodeTest() {
-        JSCode failedJSCode = new JSCode(JSCodeStatus.FAILED, JSCodeScript.JS_CODE_INFINITY_SCRIPT
-                , JSCodeResult.INFINITY_RESULT, Instant.now(), 145L);
-        Mockito.when(jsCodeRepository.save(failedJSCode)).thenReturn(failedJSCode);
-        Mockito.when(jsCodeRepository.findById(null)).thenReturn(Optional.of(failedJSCode));
-
-        List<String> scriptActualResults = jsCodeService.executeJSCode(JSCodeScript.JS_CODE_INFINITY_SCRIPT,
-                null, false);
-        List<String> scriptExpectedResults = JSCodeResult.INFINITY_RESULT;
-        for (int i = 0; i < scriptActualResults.size(); i++) {
-            assertEquals(scriptExpectedResults.get(i), scriptActualResults.get(i));
-        }
-    }
-
-    @Test
-    void executeNotDefinedJSCodeTest() {
-        JSCode failedJSCode = new JSCode(JSCodeStatus.FAILED, JSCodeScript.JS_NOT_DEFINED_ERROR_SCRIPT
-                , JSCodeResult.NOT_DEFINED_RESULT, Instant.now(), 145L);
-        Mockito.when(jsCodeRepository.save(failedJSCode)).thenReturn(failedJSCode);
-        Mockito.when(jsCodeRepository.findById(null)).thenReturn(Optional.of(failedJSCode));
-
-        List<String> scriptActualResults = jsCodeService.executeJSCode(JSCodeScript.JS_NOT_DEFINED_ERROR_SCRIPT,
-                null, false);
-        List<String> scriptExpectedResults = JSCodeResult.NOT_DEFINED_RESULT;
-        for (int i = 0; i < scriptActualResults.size(); i++) {
-            assertEquals(scriptExpectedResults.get(i), scriptActualResults.get(i));
-        }
-    }
-
-    @Test
-    void executeScheduledCodeWithShowResults() {
-        assertThrows(UnsupportedOperationException.class, () -> jsCodeService.executeJSCode(JSCodeScript.JS_CODE_RIGHT_SCRIPT,
-                "2023-06-23T22:29", true));
-    }
-
     @Test
     void getByIdTest() {
         String jsCodeId = "649970f8429f5f1e8e8e7a40";
@@ -91,10 +38,9 @@ class JSCodeServiceTest {
                 , JSCodeResult.NOT_DEFINED_RESULT, time, executionTime);
         failedJSCode.setJsCodeId(jsCodeId);
         Mockito.when(jsCodeRepository.findById(jsCodeId)).thenReturn(Optional.of(failedJSCode));
-        JSCodeDetailedResponse expectedResult = jsCodeService.getById(jsCodeId);
-        JSCodeDetailedResponse actualResult = new JSCodeDetailedResponse(jsCodeId, JSCodeStatus.FAILED,
+        JSCode expectedResult = jsCodeService.getById(jsCodeId);
+        JSCode actualResult = new JSCode(JSCodeStatus.FAILED,
                 JSCodeScript.JS_NOT_DEFINED_ERROR_SCRIPT, JSCodeResult.NOT_DEFINED_RESULT, time, executionTime);
-        assertEquals(expectedResult.getJsCodeId(), actualResult.getJsCodeId());
         assertEquals(expectedResult.getScriptResults(), actualResult.getScriptResults());
         assertEquals(expectedResult.getStatusCode(), actualResult.getStatusCode());
         assertEquals(expectedResult.getScriptBody(), actualResult.getScriptBody());
@@ -113,7 +59,7 @@ class JSCodeServiceTest {
     void getListJSCodesTest() {
         Mockito.when(jsCodeRepository.findAll()).thenReturn(getJSCodes());
         List<JSCodeCommonResponse> expectedResult = getJSCodeCommonResponses();
-        List<JSCodeCommonResponse> actualResult = jsCodeService.getListJSCodes();
+        List<JSCodeCommonResponse> actualResult = jsCodeService.getListJSCodes(Optional.empty(), Optional.empty());
         testEqualsJSCodeCommonResponseList(expectedResult, actualResult);
 
     }
@@ -132,13 +78,14 @@ class JSCodeServiceTest {
                 .filter(jsCodeCommonResponse -> jsCodeCommonResponse.getStatusCode()
                         .equals(JSCodeStatus.valueOf(jsCodeStatus.toUpperCase())))
                 .toList();
-        List<JSCodeCommonResponse> actualResult = jsCodeService.getListJSCodesByStatus(jsCodeStatus);
+        List<JSCodeCommonResponse> actualResult = jsCodeService.getListJSCodes(Optional.of(jsCodeStatus), Optional.empty());
         testEqualsJSCodeCommonResponseList(expectedResult, actualResult);
     }
 
     @Test
     void getListJSCodesSortedByScheduledTime() {
-        Mockito.when(jsCodeRepository.findAll(Sort.by(Sort.Direction.DESC, "scheduledTime")))
+        String sortBy = "scheduledTime";
+        Mockito.when(jsCodeRepository.findAll(Sort.by(Sort.Direction.DESC, sortBy)))
                 .thenReturn(getJSCodes()
                         .stream().sorted(Comparator.comparing(JSCode::getScheduledTime).reversed())
                         .toList());
@@ -146,7 +93,7 @@ class JSCodeServiceTest {
                 .stream()
                 .sorted(Comparator.comparing(JSCodeCommonResponse::getScheduledTime).reversed())
                 .toList();
-        List<JSCodeCommonResponse> actualResult = jsCodeService.getListJSCodesSortedByScheduledTime();
+        List<JSCodeCommonResponse> actualResult = jsCodeService.getListJSCodes(Optional.empty(), Optional.of(sortBy));
         testEqualsJSCodeCommonResponseList(expectedResult, actualResult);
     }
 

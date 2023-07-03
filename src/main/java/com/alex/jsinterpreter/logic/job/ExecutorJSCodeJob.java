@@ -2,8 +2,8 @@ package com.alex.jsinterpreter.logic.job;
 
 import com.alex.jsinterpreter.document.JSCode;
 import com.alex.jsinterpreter.document.JSCodeStatus;
-import com.alex.jsinterpreter.domain.mapper.JSCodeMapper;
-import com.alex.jsinterpreter.logic.collector.JSCodeCollectionCollector;
+import com.alex.jsinterpreter.logic.JSMember;
+import com.alex.jsinterpreter.logic.handler.JSCodeResultHandler;
 import com.alex.jsinterpreter.logic.service.JSCodeService;
 import lombok.extern.slf4j.Slf4j;
 import org.graalvm.polyglot.Context;
@@ -12,8 +12,6 @@ import org.springframework.stereotype.Component;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.concurrent.*;
@@ -27,28 +25,27 @@ import java.util.concurrent.*;
 @Component
 public class ExecutorJSCodeJob {
     private final JSCodeService jsCodeService;
-    private final JSCodeMapper jsCodeMapper;
     private final Map<String, ScheduledFuture<?>> scheduledJobs;
     private final ScheduledExecutorService threadPoolExecutor;
+    private final JSCodeResultHandler jsCodeResultHandler;
 
-    public ExecutorJSCodeJob(JSCodeService jsCodeService, JSCodeMapper jsCodeMapper) {
+    public ExecutorJSCodeJob(JSCodeService jsCodeService, JSCodeResultHandler jsCodeResultHandler) {
         this.jsCodeService = jsCodeService;
-        this.jsCodeMapper = jsCodeMapper;
         this.scheduledJobs = new ConcurrentHashMap<>();
         this.threadPoolExecutor = new ScheduledThreadPoolExecutor(Runtime.getRuntime().availableProcessors());
+        this.jsCodeResultHandler = jsCodeResultHandler;
     }
 
 
     /**
      * using for scheduling js code job
      *
-     * @param jsCodeId js code id for scheduling
+     * @param jsCode js code for scheduling
      */
-    public void scheduleJSCodeJobById(String jsCodeId) {
-        JSCode jsCode = jsCodeMapper.detailedResponseMapToDocument(jsCodeService.getById(jsCodeId));
+    public void scheduleJSCodeJobById(JSCode jsCode) {
         ScheduledFuture<?> scheduledJob = threadPoolExecutor.schedule(() -> executeJSCode(jsCode), Duration
                 .between(Instant.now(), jsCode.getScheduledTime()).toSeconds(), TimeUnit.SECONDS);
-        scheduledJobs.put(jsCodeId, scheduledJob);
+        scheduledJobs.put(jsCode.getJsCodeId(), scheduledJob);
         log.info("Js code was planned");
 
     }
@@ -61,12 +58,12 @@ public class ExecutorJSCodeJob {
     public void stopJSCodeJobById(String jsCodeId) {
         ScheduledFuture<?> scheduledJob = scheduledJobs.get(jsCodeId);
         if (scheduledJob == null) {
-            log.warn("scheduled job is null");
+            log.warn("scheduled job does not exist by this id -> {}", jsCodeId);
             throw new NoSuchElementException("This job does not exist by this id " + jsCodeId);
         }
         scheduledJob.cancel(true);
         scheduledJobs.remove(jsCodeId);
-        jsCodeService.updateStatus(jsCodeId, JSCodeStatus.STOPPED);
+        jsCodeService.updateStatus(jsCodeService.getById(jsCodeId), JSCodeStatus.STOPPED);
         log.info("Scheduled job was stopped");
     }
 
@@ -76,39 +73,18 @@ public class ExecutorJSCodeJob {
      * @param jsCode js code for execution
      */
     public void executeJSCode(JSCode jsCode) {
-        String script = jsCode.getScriptBody();
-        String jsCodeId = jsCode.getJsCodeId();
-        String js = "js";
-        String consoleMember = "console";
-        String logMember = "log";
-        List<String> scriptResults = new ArrayList<>();
-        try (Context context = Context.newBuilder(js).build()) {
-            jsCodeService.updateStatus(jsCodeId, JSCodeStatus.EXECUTING);
-            // collecting all output to collection
-            context.getBindings(js).getMember(consoleMember).putMember(logMember,
-                    new JSCodeCollectionCollector(scriptResults));
-            // executing js script
-            long startExecution = System.currentTimeMillis();
-            context.eval(js, script);
-            // setting execution time
-            jsCodeService.updateExecutionTime(jsCode.getJsCodeId(),
-                    System.currentTimeMillis() - startExecution);
-            jsCodeService.updateScriptResult(jsCodeId, scriptResults);
-            if (checkScriptResults(scriptResults)) {
-                jsCodeService.updateStatus(jsCodeId, JSCodeStatus.COMPLETED);
-            } else {
-                jsCodeService.updateStatus(jsCodeId, JSCodeStatus.FAILED);
-            }
-            log.info("JavaScriptCode was executed, get result -> {} ", scriptResults);
+        // clear all previous script results
+        jsCodeResultHandler.clearAllResults();
+        long startExecution = 0L;
+        try (Context context = Context.newBuilder(JSMember.JS.getValue()).build()) {
+            startExecution = System.currentTimeMillis();
+            jsCodeResultHandler.handleOutputExecutingAndUpdateJSCode(context,jsCode);
+            jsCodeService.updateExecutionTime(jsCode, System.currentTimeMillis() - startExecution);
+            log.info("JavaScriptCode was executed, get result -> {} ", jsCode.getScriptResults());
         } catch (PolyglotException e) {
-            scriptResults.add(e.getMessage());
-            jsCodeService.updateScriptResult(jsCodeId, scriptResults);
-            log.warn("java script code produce error -> {}", e.getMessage());
-            jsCodeService.updateStatus(jsCodeId, JSCodeStatus.FAILED);
+            jsCodeService.updateExecutionTime(jsCode,
+                    System.currentTimeMillis() - startExecution);
+            jsCodeResultHandler.handleExceptionsAndUpdateJSCode(e,jsCode);
         }
-    }
-
-    private boolean checkScriptResults(List<String> scriptResults) {
-        return !scriptResults.contains("Infinity");
     }
 }
