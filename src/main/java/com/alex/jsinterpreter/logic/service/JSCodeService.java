@@ -23,6 +23,9 @@ import java.util.Optional;
 @Service
 @Slf4j
 public record JSCodeService(JSCodeRepository jsCodeRepository, JSCodeMapper jsCodeMapper) {
+    private static final String JS_CODE_SORTED_PARAM_ID = "_id";
+    private static final String JS_CODE_SORTED_PARAM_SCHEDULED_TIME = "scheduledTime";
+
     /**
      * using for updating js code status
      *
@@ -82,49 +85,27 @@ public record JSCodeService(JSCodeRepository jsCodeRepository, JSCodeMapper jsCo
     }
 
     /**
-     * using for getting list js codes
+     * using for get list js codes with different optional params as sorting or/and status js code
      *
+     * @param statusJSCode optional value of status js code
+     * @param sortBy       optional value of sorting param
      * @return list of {@link JSCodeCommonResponse}
      */
-    public List<JSCodeCommonResponse> getListJSCodes() {
-        return jsCodeRepository.findAll().stream().map(jsCodeMapper::documentMapToCommonResponse).toList();
-    }
-
-    /**
-     * using for getting list js codes by status
-     *
-     * @param statusJSCode js code status
-     * @return list of {@link JSCodeCommonResponse}
-     */
-    public List<JSCodeCommonResponse> getListJSCodesByStatus(String statusJSCode) {
-        return jsCodeRepository.findByStatusCode(JSCodeStatus.valueOf(statusJSCode.toUpperCase()))
-                .stream()
-                .map(jsCodeMapper::documentMapToCommonResponse)
-                .toList();
-    }
-
-    /**
-     * using for getting list js codes sorted by id
-     *
-     * @return list of {@link JSCodeCommonResponse}
-     */
-    public List<JSCodeCommonResponse> getListJSCodesSortedById() {
-        return jsCodeRepository.findAll(Sort.by(Sort.Direction.DESC, "_id"))
-                .stream()
-                .map(jsCodeMapper::documentMapToCommonResponse)
-                .toList();
-    }
-
-    /**
-     * using for getting list js codes sorted by scheduled time
-     *
-     * @return list of {@link JSCodeCommonResponse}
-     */
-    public List<JSCodeCommonResponse> getListJSCodesSortedByScheduledTime() {
-        return jsCodeRepository.findAll(Sort.by(Sort.Direction.DESC, "scheduledTime"))
-                .stream()
-                .map(jsCodeMapper::documentMapToCommonResponse)
-                .toList();
+    public List<JSCodeCommonResponse> getListJSCodes(Optional<String> statusJSCode, Optional<String> sortBy) {
+        if (statusJSCode.isEmpty() && sortBy.isPresent()) {
+            log.info("get list js codes sorted by -> {}", sortBy);
+            return getListJSCodesSortedBy(sortBy.get());
+        }
+        if (statusJSCode.isPresent() && sortBy.isEmpty()) {
+            log.info("get list js codes by stats");
+            return getListJSCodesByStatus(statusJSCode.get());
+        }
+        if (statusJSCode.isPresent()) {
+            log.info("get list js codes by status and sorted by -> {}", sortBy);
+            return getListJSCodesByStatusAndSortedBy(statusJSCode.get(), sortBy.get());
+        }
+        log.info("get usual js code list");
+        return getListJSCodes();
     }
 
     /**
@@ -141,6 +122,39 @@ public record JSCodeService(JSCodeRepository jsCodeRepository, JSCodeMapper jsCo
         }
         jsCodeRepository.delete(jsCode);
         log.info("js code was deleted by id -> {}", jsCodeId);
+    }
+
+    private List<JSCodeCommonResponse> getListJSCodes() {
+        return jsCodeRepository.findAll().stream().map(jsCodeMapper::documentMapToCommonResponse).toList();
+    }
+
+    private List<JSCodeCommonResponse> getListJSCodesByStatusAndSortedBy(String statusJSCode, String sortBy) {
+        return jsCodeRepository.findByStatusCode(JSCodeStatus.valueOf(statusJSCode.toUpperCase()), Sort
+                        .by(Sort.Direction.DESC, sortBy))
+                .stream().map(jsCodeMapper::documentMapToCommonResponse)
+                .toList();
+    }
+
+    private List<JSCodeCommonResponse> getListJSCodesByStatus(String statusJSCode) {
+        return jsCodeRepository.findByStatusCode(JSCodeStatus.valueOf(statusJSCode.toUpperCase()))
+                .stream()
+                .map(jsCodeMapper::documentMapToCommonResponse)
+                .toList();
+    }
+
+    private List<JSCodeCommonResponse> getListJSCodesSortedBy(String sortBy) {
+        checkSortByParam(sortBy);
+        return jsCodeRepository.findAll(Sort.by(Sort.Direction.DESC, sortBy))
+                .stream()
+                .map(jsCodeMapper::documentMapToCommonResponse)
+                .toList();
+    }
+
+    private void checkSortByParam(String sortBy) {
+        if (!sortBy.equalsIgnoreCase(JS_CODE_SORTED_PARAM_ID) && !sortBy.equalsIgnoreCase(JS_CODE_SORTED_PARAM_SCHEDULED_TIME)) {
+
+            throw new UnsupportedOperationException("Sorting by this param does not supported yet" + sortBy);
+        }
     }
 
     private boolean checkStatusForDeletionJSCode(JSCode jsCode) {

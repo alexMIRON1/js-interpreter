@@ -10,6 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * This class {@code JSCodeController } represents endpoints of API which allow us doing operation with
@@ -32,23 +33,9 @@ public record JSCodeController(JSCodeService jsCodeService, JSCodeManager jsCode
     }
 
     @GetMapping
-    public List<JSCodeCommonResponse> getJSCodes() {
-        return jsCodeService.getListJSCodes();
-    }
-
-    @GetMapping("status/{status}")
-    public List<JSCodeCommonResponse> getJSCodesByStatus(@PathVariable("status") String status) {
-        return jsCodeService.getListJSCodesByStatus(status);
-    }
-
-    @GetMapping("/sortedById")
-    public List<JSCodeCommonResponse> getJSCodesSortedById() {
-        return jsCodeService.getListJSCodesSortedById();
-    }
-
-    @GetMapping("/sortedByScheduledTime")
-    public List<JSCodeCommonResponse> getJSCodesSortedByScheduledTime() {
-        return jsCodeService.getListJSCodesSortedByScheduledTime();
+    public List<JSCodeCommonResponse> getJSCodes(@RequestParam Optional<String> status,
+                                                 @RequestParam Optional<String> sortBy) {
+        return jsCodeService.getListJSCodes(status, sortBy);
     }
 
     @GetMapping("/{id}")
